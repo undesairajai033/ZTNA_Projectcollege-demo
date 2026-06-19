@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>College Login</title>
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        body.login-page {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            background: #050a14;
+            overflow: hidden;
+        }
+
+        header {
+            background: navy;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 24px;
+            position: relative;
+        }
+
+        .home-btn {
+            position: absolute;
+            right: 20px;
+            top: 15px;
+            background: orange;
+            padding: 8px 15px;
+            border-radius: 8px;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .main-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            height: calc(100vh - 70px);
+        }
+
+        .lamp {
+            position: relative;
+            width: 200px;
+            cursor: pointer;
+        }
+
+        .lamp-head {
+            width: 180px;
+            height: 90px;
+            background: #eee;
+            border-radius: 90px 90px 0 0;
+        }
+
+        .lamp-stand {
+            width: 12px;
+            height: 150px;
+            background: #ddd;
+            margin: auto;
+            position: relative;
+        }
+
+        .lamp-stand::after {
+            content: "";
+            display: block;
+            width: 6px;
+            height: 60px;
+            background: gold;
+            margin: auto;
+            border-radius: 5px;
+        }
+
+        .lamp::before {
+            content: "";
+            position: absolute;
+            top: -40px;
+            left: -50px;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(255,223,90,0.5) 0%, transparent 70%);
+            opacity: 0;
+            transition: 0.4s;
+            pointer-events: none;
+        }
+
+        body.light-on .lamp::before {
+            opacity: 1;
+        }
+
+        .container {
+            width: 400px;
+            padding: 40px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(15px);
+            color: white;
+            transform: scale(0.7);
+            opacity: 0;
+            pointer-events: none;
+            transition: 0.4s;
+        }
+
+        .container.show {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .container h2 {
+            text-align: center;
+            font-size: 32px;
+            margin-bottom: 25px;
+        }
+
+        .container input {
+            width: 100%;
+            padding: 14px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: none;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .container button {
+            display: block;
+            margin: 12px auto;
+            padding: 12px 22px;
+            border: none;
+            background: gold;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            width: 100%;
+        }
+
+        #msg, #timer {
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body class="login-page">
+
+<header>
+    Datta Meghe College Portal
+    <a href="/" class="home-btn">Home</a>
+</header>
+
+<div class="main-container">
+
+    <div class="lamp" onclick="toggleLamp()">
+        <div class="lamp-head"></div>
+        <div class="lamp-stand"></div>
+    </div>
+
+    <div class="container" id="loginBox">
+        <h2>Login</h2>
+
+        <input type="email" id="email" placeholder="Enter Email">
+        <input type="password" id="password" placeholder="Enter Password">
+
+        <button id="loginBtn" onclick="login()">Login</button>
+        <button type="button" onclick="loginWithBiometric()">Quick Biometric Login</button>
+
+        <input type="text" id="otp" placeholder="Enter OTP" style="display:none;">
+        <button type="button" onclick="verifyOTP()" id="otpBtn" style="display:none;">Verify OTP</button>
+
+        <p id="timer"></p>
+        <button type="button" onclick="resendOTP()" id="resendBtn" style="display:none;">Resend OTP</button>
+
+        <p id="msg"></p>
+    </div>
+
+</div>
+
+<script>
+let lampOn = false;
+let userEmail = "";
+let timerInterval;
+
+const msg = document.getElementById("msg");
+const loginBox = document.getElementById("loginBox");
+
+function toggleLamp() {
+    lampOn = !lampOn;
+
+    if (lampOn) {
+        document.body.classList.add("light-on");
+        loginBox.classList.add("show");
+    } else {
+        document.body.classList.remove("light-on");
+        loginBox.classList.remove("show");
+    }
+}
+
+function startTimer() {
+    let timeLeft = 30;
+    document.getElementById("resendBtn").style.display = "none";
+
+    clearInterval(timerInterval);
+
+    timerInterval = setInterval(() => {
+        document.getElementById("timer").innerText = "Resend OTP in " + timeLeft + "s";
+        timeLeft--;
+
+        if (timeLeft < 0) {
+            clearInterval(timerInterval);
+            document.getElementById("timer").innerText = "";
+            document.getElementById("resendBtn").style.display = "block";
+        }
+    }, 1000);
+}
+
+function login() {
+    const email = document.getElementById("email").value.trim().toLowerCase();
+    const password = document.getElementById("password").value.trim();
+    const loginBtn = document.getElementById("loginBtn");
+
+    msg.innerText = "";
+
+    if (!email || !password) {
+        msg.innerText = "Please fill all fields";
+        return;
+    }
+
+    loginBtn.disabled = true;
+
+    fetch("/api/login", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            email: email,
+            password: password,
+            device: navigator.userAgent
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        loginBtn.disabled = false;
+
+        if (data.success && data.otpRequired) {
+            userEmail = email;
+            localStorage.setItem("biometricEmail", email);
+
+            msg.innerText = data.message || "OTP sent to your email";
+            document.getElementById("otp").style.display = "block";
+            document.getElementById("otpBtn").style.display = "block";
+            startTimer();
+        } else {
+            msg.innerText = data.message || "Login failed";
+        }
+    })
+    .catch(err => {
+        loginBtn.disabled = false;
+        msg.innerText = "Server error: " + err.message;
+    });
+}
+
+function verifyOTP() {
+    const otp = document.getElementById("otp").value.trim();
+
+    if (!userEmail) {
+        msg.innerText = "Login first";
+        return;
+    }
+
+    if (!otp) {
+        msg.innerText = "Enter OTP";
+        return;
+    }
+
+    fetch("/api/verify-otp", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            email: userEmail,
+            otp: otp
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            localStorage.setItem("token", data.token);
+            localStorage.setItem("biometricEmail", userEmail);
+
+            if (data.role === "admin") {
+                window.location.href = "/admin.html";
+            } else if (data.role === "faculty") {
+                window.location.href = "/faculty.html";
+            } else {
+                window.location.href = "/student.html";
+            }
+        } else {
+            msg.innerText = data.message || "OTP verification failed";
+        }
+    })
+    .catch(err => {
+        msg.innerText = "Error: " + err.message;
+    });
+}
+
+function resendOTP() {
+    if (!userEmail) {
+        msg.innerText = "Login first";
+        return;
+    }
+
+    fetch("/api/resend-otp", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            email: userEmail
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        msg.innerText = data.message || "OTP resent";
+        if (data.success) {
+            startTimer();
+        }
+    })
+    .catch(err => {
+        msg.innerText = "Error: " + err.message;
+    });
+}
+
+function bufferDecode(value) {
+    return Uint8Array.from(
+        atob(value.replace(/-/g, "+").replace(/_/g, "/")),
+        c => c.charCodeAt(0)
+    );
+}
+
+function bufferEncode(value) {
+    return btoa(String.fromCharCode(...new Uint8Array(value)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+async function loginWithBiometric() {
+    let email = document.getElementById("email").value.trim().toLowerCase();
+
+    if (!email) {
+        email = localStorage.getItem("biometricEmail") || "";
+    }
+
+    if (!email) {
+        msg.innerText = "No biometric account found. Please login once normally first.";
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/biometric/login-options", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ email })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+            msg.innerText = data.message;
+            return;
+        }
+
+        const options = data.options;
+        options.challenge = bufferDecode(options.challenge);
+
+        if (options.allowCredentials && options.allowCredentials.length) {
+            options.allowCredentials = options.allowCredentials.map((cred) => ({
+                ...cred,
+                id: bufferDecode(cred.id)
+            }));
+        }
+
+        const assertion = await navigator.credentials.get({
+            publicKey: options
+        });
+
+        const verifyRes = await fetch("/api/biometric/login-verify", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: email,
+                credential: {
+                    id: assertion.id,
+                    rawId: bufferEncode(assertion.rawId),
+                    type: assertion.type,
+                    response: {
+                        authenticatorData: bufferEncode(assertion.response.authenticatorData),
+                        clientDataJSON: bufferEncode(assertion.response.clientDataJSON),
+                        signature: bufferEncode(assertion.response.signature),
+                        userHandle: assertion.response.userHandle
+                            ? bufferEncode(assertion.response.userHandle)
+                            : null
+                    },
+                    clientExtensionResults: assertion.getClientExtensionResults
+                        ? assertion.getClientExtensionResults()
+                        : {}
+                }
+            })
+        });
+
+        const verifyData = await verifyRes.json();
+
+        if (verifyData.success) {
+            localStorage.setItem("token", verifyData.token);
+            localStorage.setItem("biometricEmail", email);
+
+            if (verifyData.role === "admin") {
+                window.location.href = "/admin.html";
+            } else if (verifyData.role === "faculty") {
+                window.location.href = "/faculty.html";
+            } else {
+                window.location.href = "/student.html";
+            }
+        } else {
+            msg.innerText = verifyData.message;
+        }
+    } catch (error) {
+        console.log("BIOMETRIC LOGIN ERROR:", error);
+        msg.innerText = "Biometric login failed";
+    }
+}
+</script>
+
+</body>
+</html>

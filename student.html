@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>Datta Meghe College Portal - Student</header>
+
+<nav>
+    <a href="index.html">Home</a>
+    <a href="login.html" onclick="logout()">Logout</a>
+</nav>
+
+<div class="container">
+
+    <h2 id="dashboardTitle">Student Dashboard</h2>
+    <p id="liveTime"></p>
+
+    <div class="profile-card">
+        <img id="profilePhoto" src="" alt="Profile Photo">
+        <h2 id="profileName"></h2>
+        <p><b>Email:</b> <span id="profileEmail"></span></p>
+        <p><b>Role:</b> <span id="profileRole"></span></p>
+        <p><b>Department:</b> <span id="profileDept"></span></p>
+        <p><b>Phone:</b> <span id="profilePhone"></span></p>
+    </div>
+
+    <div class="stats-container">
+        <div class="stat-card">
+            <h3 id="attendanceValue">0%</h3>
+            <p>Your Attendance</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="subjectCount">0</h3>
+            <p>Total Subjects</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="avgMarks">0</h3>
+            <p>Average Marks</p>
+        </div>
+    </div>
+
+    <h3>Your Marks & Attendance</h3>
+    <button onclick="loadData()">Load Data</button>
+
+    <div id="output" style="margin-top:15px;"></div>
+
+</div>
+
+<script>
+setTimeout(() => {
+    alert("Session expired!");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}, 60000);
+
+function getToken(){
+    return localStorage.getItem("token");
+}
+
+function checkAuth(){
+    if(!getToken()){
+        alert("Session expired. Please login again.");
+        window.location.href = "login.html";
+    }
+}
+
+checkAuth();
+
+function handleResponse(res){
+    if(res.status === 401 || res.status === 403){
+        localStorage.removeItem("token");
+        alert("Session expired. Login again.");
+        window.location.href = "login.html";
+        return null;
+    }
+    return res.json();
+}
+
+function updateTime(){
+    const now = new Date();
+    document.getElementById("liveTime").innerText =
+        "Current Time: " + now.toLocaleString();
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+function loadProfile(){
+    fetch("/api/profile", {
+        headers: {
+            "Authorization": getToken()
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        document.getElementById("profilePhoto").src = data.photo;
+        document.getElementById("profileName").innerText = data.name;
+        document.getElementById("profileEmail").innerText = data.email;
+        document.getElementById("profileRole").innerText = data.role;
+        document.getElementById("profileDept").innerText = data.department;
+        document.getElementById("profilePhone").innerText = data.phone;
+        document.getElementById("dashboardTitle").innerText = "Welcome, " + data.name;
+    })
+    .catch(() => {
+        console.log("Profile load error");
+    });
+}
+
+function loadData(){
+    const token = getToken();
+
+    fetch("/api/student/1", {
+        headers: {
+            "Authorization": token
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        document.getElementById("attendanceValue").innerText = data.attendance + "%";
+
+        document.getElementById("output").innerHTML = `
+            <p><b>Name:</b> ${data.name}</p>
+            <p><b>Attendance:</b> ${data.attendance}%</p>
+        `;
+    });
+
+    fetch("/api/marks/1", {
+        headers: {
+            "Authorization": token
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        let marksHTML = "<h4>Marks:</h4>";
+        let total = 0;
+        let count = 0;
+
+        for(let subject in data.marks){
+            marksHTML += `<p>${subject}: ${data.marks[subject]}</p>`;
+            total += Number(data.marks[subject]);
+            count++;
+        }
+
+        const avg = count ? (total / count).toFixed(1) : 0;
+
+        document.getElementById("subjectCount").innerText = count;
+        document.getElementById("avgMarks").innerText = avg;
+
+        document.getElementById("output").innerHTML += marksHTML;
+    });
+}
+
+function logout(){
+    localStorage.removeItem("token");
+}
+
+loadProfile();
+</script>
+
+<footer style="background:navy; color:white; padding:15px; margin-top:40px;">
+    © 2026 Datta Meghe College Portal
+</footer>
+
+</body>
+</html>

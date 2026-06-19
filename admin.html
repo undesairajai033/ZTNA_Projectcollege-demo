@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>Datta Meghe College Portal - Admin</header>
+
+<nav>
+    <a href="index.html">Home</a>
+    <a href="login.html" onclick="logout()">Logout</a>
+</nav>
+
+<div class="container">
+
+    <h2 id="dashboardTitle">Admin Dashboard</h2>
+    <p id="liveTime"></p>
+
+    <div class="profile-card">
+        <img id="profilePhoto" src="" alt="Profile Photo">
+        <h2 id="profileName"></h2>
+        <p><b>Email:</b> <span id="profileEmail"></span></p>
+        <p><b>Role:</b> <span id="profileRole"></span></p>
+        <p><b>Department:</b> <span id="profileDept"></span></p>
+        <p><b>Phone:</b> <span id="profilePhone"></span></p>
+    </div>
+
+    <div style="text-align:center; margin-top:15px;">
+        <button onclick="enableBiometric()">Enable Biometric</button>
+        <p id="bioMsg"></p>
+    </div>
+
+    <div class="stats-container">
+        <div class="stat-card">
+            <h3 id="totalStudents">0</h3>
+            <p>Total Students</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="avgAttendance">0%</h3>
+            <p>Average Attendance</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="totalMarks">0</h3>
+            <p>Total Subject Entries</p>
+        </div>
+    </div>
+
+    <h3>Add Student</h3>
+
+    <input type="text" id="name" placeholder="Name"><br><br>
+    <input type="email" id="email" placeholder="Email"><br><br>
+    <input type="number" id="attendance" placeholder="Attendance %"><br><br>
+
+    <input type="number" id="maths" placeholder="Maths Marks"><br><br>
+    <input type="number" id="ai" placeholder="AI Marks"><br><br>
+    <input type="number" id="ds" placeholder="DS Marks"><br><br>
+
+    <button onclick="addStudent()">Add Student</button>
+
+    <hr>
+
+    <h3>All Students</h3>
+
+    <input type="text" id="searchBox" placeholder="Search by name..." onkeyup="filterStudents()"><br><br>
+
+    <table border="1" width="100%" style="border-collapse:collapse;text-align:center;">
+        <thead style="background:#f0f4ff;">
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Attendance</th>
+                <th>Marks</th>
+                <th>Delete</th>
+            </tr>
+        </thead>
+
+        <tbody id="studentTable">
+            <tr><td colspan="6">Loading...</td></tr>
+        </tbody>
+    </table>
+
+</div>
+
+<script>
+setTimeout(() => {
+    alert("Session expired!");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}, 60000);
+
+function getToken(){
+    return localStorage.getItem("token");
+}
+
+function checkAuth(){
+    if(!getToken()){
+        alert("Session expired. Please login again.");
+        window.location.href = "login.html";
+    }
+}
+
+checkAuth();
+
+const tableBody = document.getElementById("studentTable");
+let allStudents = [];
+
+function handleResponse(res){
+    if(res.status === 401 || res.status === 403){
+        localStorage.removeItem("token");
+        alert("Session expired. Login again.");
+        window.location.href = "login.html";
+        return null;
+    }
+    return res.json();
+}
+
+function updateTime(){
+    const now = new Date();
+    document.getElementById("liveTime").innerText =
+        "Current Time: " + now.toLocaleString();
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+function loadProfile(){
+    fetch("/api/profile", {
+        headers: {
+            "Authorization": getToken()
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        document.getElementById("profilePhoto").src = data.photo;
+        document.getElementById("profileName").innerText = data.name;
+        document.getElementById("profileEmail").innerText = data.email;
+        document.getElementById("profileRole").innerText = data.role;
+        document.getElementById("profileDept").innerText = data.department;
+        document.getElementById("profilePhone").innerText = data.phone;
+        document.getElementById("dashboardTitle").innerText = "Welcome, " + data.name;
+
+        localStorage.setItem("biometricEmail", data.email);
+    })
+    .catch(() => {
+        console.log("Profile load error");
+    });
+}
+
+function renderStudents(students){
+    if(!students.length){
+        tableBody.innerHTML = `<tr><td colspan="6">No students found</td></tr>`;
+        return;
+    }
+
+    let html = "";
+
+    students.forEach(s => {
+        let marks = "";
+
+        for(let sub in s.marks){
+            marks += `${sub}: ${s.marks[sub]}<br>`;
+        }
+
+        html += `
+        <tr>
+            <td>${s.id}</td>
+            <td>${s.name}</td>
+            <td>${s.email}</td>
+            <td>${s.attendance}%</td>
+            <td>${marks}</td>
+            <td>
+                <button onclick="deleteStudent(${s.id})">Delete</button>
+            </td>
+        </tr>`;
+    });
+
+    tableBody.innerHTML = html;
+}
+
+function updateStats(students){
+    const total = students.length;
+
+    let attendanceSum = 0;
+    let marksEntries = 0;
+
+    students.forEach(s => {
+        attendanceSum += Number(s.attendance || 0);
+
+        for(let sub in s.marks){
+            marksEntries++;
+        }
+    });
+
+    const avg = total ? (attendanceSum / total).toFixed(1) : 0;
+
+    document.getElementById("totalStudents").innerText = total;
+    document.getElementById("avgAttendance").innerText = avg + "%";
+    document.getElementById("totalMarks").innerText = marksEntries;
+}
+
+function loadStudents(){
+    fetch("/api/students",{
+        headers:{
+            "Authorization": getToken()
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(students => {
+        if(!students) return;
+
+        allStudents = students;
+        renderStudents(allStudents);
+        updateStats(allStudents);
+    })
+    .catch(()=>{
+        tableBody.innerHTML = `
+        <tr><td colspan="6" style="color:red;">🚫 Failed to load</td></tr>`;
+    });
+}
+
+function filterStudents(){
+    const search = document.getElementById("searchBox").value.toLowerCase();
+
+    const filtered = allStudents.filter(s =>
+        s.name.toLowerCase().includes(search)
+    );
+
+    renderStudents(filtered);
+}
+
+function addStudent(){
+    const name = document.getElementById("name").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const attendance = document.getElementById("attendance").value;
+
+    const maths = document.getElementById("maths").value;
+    const ai = document.getElementById("ai").value;
+    const ds = document.getElementById("ds").value;
+
+    if(!name || !email){
+        alert("Please fill all fields");
+        return;
+    }
+
+    fetch("/api/students",{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json",
+            "Authorization": getToken()
+        },
+        body: JSON.stringify({
+            name,
+            email,
+            attendance,
+            marks:{
+                Maths: maths,
+                AI: ai,
+                DS: ds
+            }
+        })
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        alert("Student Added ✅");
+
+        document.getElementById("name").value = "";
+        document.getElementById("email").value = "";
+        document.getElementById("attendance").value = "";
+        document.getElementById("maths").value = "";
+        document.getElementById("ai").value = "";
+        document.getElementById("ds").value = "";
+
+        loadStudents();
+    })
+    .catch(()=>{
+        alert("🚫 Failed to add");
+    });
+}
+
+function deleteStudent(id){
+    if(!confirm("Are you sure?")) return;
+
+    fetch(`/api/students/${id}`,{
+        method:"DELETE",
+        headers:{
+            "Authorization": getToken()
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        alert("Student Deleted");
+        loadStudents();
+    })
+    .catch(()=>{
+        alert("🚫 Delete failed");
+    });
+}
+
+function logout(){
+    localStorage.removeItem("token");
+}
+
+function bufferDecode(value) {
+    return Uint8Array.from(
+        atob(value.replace(/-/g, "+").replace(/_/g, "/")),
+        c => c.charCodeAt(0)
+    );
+}
+
+function bufferEncode(value) {
+    return btoa(String.fromCharCode(...new Uint8Array(value)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+async function enableBiometric() {
+    try {
+        const res = await fetch("/api/biometric/register-options", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": localStorage.getItem("token")
+            }
+        });
+
+        const options = await res.json();
+
+        if (options.message) {
+            document.getElementById("bioMsg").innerText = options.message;
+            return;
+        }
+
+        options.challenge = bufferDecode(options.challenge);
+        options.user.id = bufferDecode(options.user.id);
+
+        if (options.excludeCredentials && options.excludeCredentials.length) {
+            options.excludeCredentials = options.excludeCredentials.map(cred => ({
+                ...cred,
+                id: bufferDecode(cred.id)
+            }));
+        }
+
+        const credential = await navigator.credentials.create({
+            publicKey: options
+        });
+
+        const verifyRes = await fetch("/api/biometric/register-verify", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": localStorage.getItem("token")
+            },
+            body: JSON.stringify({
+                id: credential.id,
+                rawId: bufferEncode(credential.rawId),
+                type: credential.type,
+                response: {
+                    attestationObject: bufferEncode(credential.response.attestationObject),
+                    clientDataJSON: bufferEncode(credential.response.clientDataJSON),
+                    transports: credential.response.getTransports
+                        ? credential.response.getTransports()
+                        : ["internal"]
+                }
+            })
+        });
+
+        const verifyData = await verifyRes.json();
+        document.getElementById("bioMsg").innerText = verifyData.message;
+    } catch (error) {
+        console.log("BIOMETRIC FRONTEND ERROR:", error);
+        document.getElementById("bioMsg").innerText = error.message || "Biometric setup failed";
+    }
+}
+
+loadProfile();
+loadStudents();
+</script>
+
+<footer style="background:navy;color:white;padding:15px;margin-top:40px;">
+    © 2026 Datta Meghe College Portal
+</footer>
+
+</body>
+</html>

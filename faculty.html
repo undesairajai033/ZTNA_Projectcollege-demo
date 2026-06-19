@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Faculty Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>Datta Meghe College Portal - Faculty</header>
+
+<nav>
+    <a href="index.html">Home</a>
+    <a href="login.html" onclick="logout()">Logout</a>
+</nav>
+
+<div class="container">
+
+    <h2 id="dashboardTitle">Faculty Dashboard</h2>
+    <p id="liveTime"></p>
+
+    <div class="profile-card">
+        <img id="profilePhoto" src="" alt="Profile Photo">
+        <h2 id="profileName"></h2>
+        <p><b>Email:</b> <span id="profileEmail"></span></p>
+        <p><b>Role:</b> <span id="profileRole"></span></p>
+        <p><b>Department:</b> <span id="profileDept"></span></p>
+        <p><b>Phone:</b> <span id="profilePhone"></span></p>
+        <p><b>Subject:</b> <span id="profileSubject"></span></p>
+    </div>
+
+    <div class="stats-container">
+        <div class="stat-card">
+            <h3 id="totalStudents">0</h3>
+            <p>Total Students</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="avgAttendance">0%</h3>
+            <p>Average Attendance</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="topperCount">0</h3>
+            <p>Students 90%+</p>
+        </div>
+    </div>
+
+    <h3>All Students</h3>
+
+    <input type="text" id="searchBox" placeholder="Search by name..." onkeyup="filterStudents()"><br><br>
+
+    <table border="1" width="100%" style="border-collapse: collapse; text-align: center;">
+        <thead style="background: #f0f4ff;">
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Attendance (%)</th>
+                <th>Marks</th>
+            </tr>
+        </thead>
+
+        <tbody id="studentTable">
+            <tr><td colspan="5">Loading...</td></tr>
+        </tbody>
+    </table>
+
+</div>
+
+<script>
+setTimeout(() => {
+    alert("Session expired!");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}, 60000);
+
+function getToken(){
+    return localStorage.getItem("token");
+}
+
+function checkAuth(){
+    if(!getToken()){
+        alert("Session expired. Please login again.");
+        window.location.href = "login.html";
+    }
+}
+
+checkAuth();
+
+const tableBody = document.getElementById("studentTable");
+let allStudents = [];
+
+function handleResponse(res){
+    if(res.status === 401 || res.status === 403){
+        localStorage.removeItem("token");
+        alert("Session expired. Login again.");
+        window.location.href = "login.html";
+        return null;
+    }
+    return res.json();
+}
+
+function updateTime(){
+    const now = new Date();
+    document.getElementById("liveTime").innerText =
+        "Current Time: " + now.toLocaleString();
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+function loadProfile(){
+    fetch("/api/profile", {
+        headers: {
+            "Authorization": getToken()
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(data => {
+        if(!data) return;
+
+        document.getElementById("profilePhoto").src = data.photo;
+        document.getElementById("profileName").innerText = data.name;
+        document.getElementById("profileEmail").innerText = data.email;
+        document.getElementById("profileRole").innerText = data.role;
+        document.getElementById("profileDept").innerText = data.department;
+        document.getElementById("profilePhone").innerText = data.phone;
+        document.getElementById("profileSubject").innerText = data.subject || "N/A";
+        document.getElementById("dashboardTitle").innerText = "Welcome, " + data.name;
+    })
+    .catch(() => {
+        console.log("Profile load error");
+    });
+}
+
+function renderStudents(students){
+    if(!students.length){
+        tableBody.innerHTML = `<tr><td colspan="5">No students found</td></tr>`;
+        return;
+    }
+
+    let html = "";
+
+    students.forEach(student => {
+        let marksStr = "";
+        for(let subject in student.marks){
+            marksStr += `${subject}: ${student.marks[subject]}<br>`;
+        }
+
+        html += `
+        <tr>
+            <td>${student.id}</td>
+            <td>${student.name}</td>
+            <td>${student.email}</td>
+            <td>${student.attendance}%</td>
+            <td>${marksStr}</td>
+        </tr>`;
+    });
+
+    tableBody.innerHTML = html;
+}
+
+function updateStats(students){
+    const total = students.length;
+    let attendanceSum = 0;
+    let topperCount = 0;
+
+    students.forEach(s => {
+        attendanceSum += Number(s.attendance || 0);
+        if(Number(s.attendance) >= 90) topperCount++;
+    });
+
+    const avg = total ? (attendanceSum / total).toFixed(1) : 0;
+
+    document.getElementById("totalStudents").innerText = total;
+    document.getElementById("avgAttendance").innerText = avg + "%";
+    document.getElementById("topperCount").innerText = topperCount;
+}
+
+function loadStudents(){
+    fetch("/api/students", {
+        headers:{
+            "Authorization": getToken()
+        }
+    })
+    .then(res => handleResponse(res))
+    .then(students => {
+        if(!students) return;
+
+        allStudents = students;
+        renderStudents(allStudents);
+        updateStats(allStudents);
+    })
+    .catch(()=>{
+        tableBody.innerHTML =
+        `<tr><td colspan="5" style="color:red;">🚫 Failed to load</td></tr>`;
+    });
+}
+
+function filterStudents(){
+    const search = document.getElementById("searchBox").value.toLowerCase();
+
+    const filtered = allStudents.filter(s =>
+        s.name.toLowerCase().includes(search)
+    );
+
+    renderStudents(filtered);
+}
+
+function logout(){
+    localStorage.removeItem("token");
+}
+
+loadProfile();
+loadStudents();
+</script>
+
+<footer style="background:navy; color:white; padding:15px; margin-top:40px;">
+    © 2026 Datta Meghe College Portal
+</footer>
+
+</body>
+</html>
